@@ -1,0 +1,187 @@
+
+name: SONiC Upstream Synchronization
+
+on:
+  schedule:
+    # OPTION 1: Every 6 hours
+    - cron: '0 */6 * * *' 
+
+    # OPTION 2: Daily at 08:00 AM IST
+    # - cron: '30 2 * * *'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: upstream-sync-otn-dev
+  cancel-in-progress: false
+
+jobs:
+  sync-upstream:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout organization repository
+        uses: actions/checkout@v4
+        with:
+          ref: otn-dev
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream and organization branches
+        run: |
+          git remote add upstream \
+            https://github.com/sonic-otn/sonic-buildimage.git
+
+          git fetch origin otn-dev
+          git fetch upstream otn-dev
+
+      - name: Detect upstream changes
+        id: detect
+        run: |
+          COUNT=$(git rev-list --count \
+            origin/otn-dev..upstream/otn-dev)
+
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+          echo "New upstream commits: $COUNT"
+
+          if [ "$COUNT" -gt 0 ]; then
+            git log --oneline \
+              origin/otn-dev..upstream/otn-dev
+          fi
+
+      - name: Stop if no upstream changes
+        if: steps.detect.outputs.count == '0'
+        run: |
+          echo "No new upstream commits."
+          exit 0
+
+      - name: Check for existing synchronization PR
+        if: steps.detect.outputs.count != '0'
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR=$(gh pr list \
+            --base otn-dev \
+            --state open \
+            --json number,headRefName,url \
+            --jq '.[] |
+              select(.headRefName |
+              startswith("sync/upstream-")) |
+              "\(.number) \(.url)"' | head -n 1)
+
+          if [ -n "$PR" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Existing synchronization PR: $PR"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create synchronization branch
+        if: steps.detect.outputs.count != '0' && steps.existing.outputs.exists == 'false'
+        id: branch
+        run: |
+          BRANCH="sync/upstream-$(date -u +%Y%m%d-%H%M%S)"
+
+          git switch --create "$BRANCH" origin/otn-dev
+
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Merge upstream
+        if: steps.detect.outputs.count != '0' && steps.existing.outputs.exists == 'false'
+        id: merge
+        continue-on-error: true
+        run: |
+          git merge --no-ff --no-edit upstream/otn-dev
+
+      - name: Handle merge conflicts
+        if: steps.merge.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CONFLICTS=$(git diff --name-only --diff-filter=U)
+
+          echo "Conflicting files:"
+          echo "$CONFLICTS"
+
+          git merge --abort
+
+          EXISTING=$(gh issue list \
+            --state open \
+            --json number,title,url \
+            --jq '.[] |
+              select(.title |
+              startswith("Upstream sync conflict:")) |
+              "\(.number) \(.url)"' | head -n 1)
+
+          if [ -z "$EXISTING" ]; then
+            gh issue create \
+              --title "Upstream sync conflict: otn-dev" \
+              --body "$(cat <<EOF
+          Automatic upstream synchronization detected merge conflicts.
+
+          Source:
+          https://github.com/sonic-otn/sonic-buildimage/tree/otn-dev
+
+          Target:
+          https://github.com/nokia-sonic-otn/sonic-buildimage-otn/tree/otn-dev
+
+          Conflicting files:
+
+          $CONFLICTS
+
+          The workflow stopped without merging or pushing.
+
+          Please resolve the conflicts manually using a synchronization branch,
+          validate the build and submit a Pull Request.
+          EOF
+          )"
+          else
+            echo "An upstream conflict issue is already open: $EXISTING"
+          fi
+
+          exit 1
+
+      - name: Push synchronization branch
+        if: steps.merge.outcome == 'success' && steps.existing.outputs.exists == 'false'
+        run: |
+          git push origin "${{ steps.branch.outputs.name }}"
+
+      - name: Create Pull Request
+        if: steps.merge.outcome == 'success' && steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base otn-dev \
+            --head "${{ steps.branch.outputs.name }}" \
+            --title "Upstream sync: otn-dev" \
+            --body "$(cat <<EOF
+          ## Upstream synchronization
+
+          Automatically generated synchronization PR.
+
+          **Source:** sonic-otn/sonic-buildimage:otn-dev
+
+          **Target:** nokia-sonic-otn/sonic-buildimage-otn:otn-dev
+
+          **New upstream commits:** ${{ steps.detect.outputs.count }}
+
+          Please review all changes, resolve any outstanding issues,
+          run the required build and validation, and obtain approval
+          before merging.
+
+          This workflow does not merge directly into otn-dev.
+          EOF
+          )"
