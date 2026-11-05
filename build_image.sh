@@ -183,7 +183,7 @@ elif [ "$IMAGE_TYPE" = "kvm" ]; then
         # Generate 4-asic KVM image
         generate_kvm_image 4
         # Generate 6-asic KVM image
-        generate_kvm_image 6
+        # generate_kvm_image 6
     fi
 
 
