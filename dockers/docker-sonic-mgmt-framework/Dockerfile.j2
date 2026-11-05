@@ -34,3 +34,6 @@ FROM $BASE
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENTRYPOINT ["/usr/local/bin/supervisord"]
+
+RUN ln -sf /host_etc/passwd /etc/passwd
+RUN ln -sf /host_etc/group /etc/group

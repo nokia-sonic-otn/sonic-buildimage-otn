@@ -215,3 +215,6 @@ ENV CC=gcc CPP=cpp CXX=c++ LDSHARED="gcc -pthread -shared" PYMSSQL_BUILD_WITH_BU
 # The SONiC community usually uses the setup-container.sh tool in the sonic-mgmt repo to create the sonic-mgmt container.
 # The tool will create a user with the same uid and gid of the host user who runs the tool.
 RUN if getent passwd ubuntu; then userdel -r ubuntu; fi
+
+RUN ln -sf /host_etc/passwd /etc/passwd
+RUN ln -sf /host_etc/group /etc/group

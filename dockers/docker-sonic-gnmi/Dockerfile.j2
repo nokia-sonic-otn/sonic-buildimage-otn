@@ -39,4 +39,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Pass the image_version to container
 ENV IMAGE_VERSION=$image_version
 
+RUN ln -sf /host_etc/passwd /etc/passwd
+RUN ln -sf /host_etc/group /etc/group
+
 ENTRYPOINT ["/usr/local/bin/supervisord"]
