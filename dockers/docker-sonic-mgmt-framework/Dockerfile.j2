@@ -33,7 +33,8 @@ FROM $BASE
 {{ rsync_from_builder_stage() }}
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENTRYPOINT ["/usr/local/bin/supervisord"]
 
 RUN ln -sf /host_etc/passwd /etc/passwd
 RUN ln -sf /host_etc/group /etc/group
+
+ENTRYPOINT ["/usr/local/bin/supervisord"]
