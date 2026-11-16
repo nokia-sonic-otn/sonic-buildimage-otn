@@ -166,6 +166,7 @@ include $(RULES_PATH)/config
 ###############################################################################
 ## Version control related exports
 ###############################################################################
+export ENABLE_TRANSLIB_ROLLBACK
 export BUILD_PACKAGES_URL
 export TRUSTED_GPG_URLS
 export SONIC_VERSION_CONTROL_COMPONENTS
@@ -528,6 +529,7 @@ endif
 $(info "CROSS_BUILD_ENVIRON"             : "$(CROSS_BUILD_ENVIRON)")
 $(info "INCLUDE_EXTERNAL_PATCHES"        : "$(INCLUDE_EXTERNAL_PATCHES)")
 $(info "PTF_ENV_PY_VER"                  : "$(PTF_ENV_PY_VER)")
+$(info "ENABLE_TRANSLIB_ROLLBACK"        : "$(ENABLE_TRANSLIB_ROLLBACK)")
 $(info "ENABLE_MULTIDB"                  : "$(ENABLE_MULTIDB)")
 $(info "ENABLE_SBOM"                     : "$(ENABLE_SBOM)")
 $(info "SBOM_FORMAT"                     : "$(SBOM_FORMAT)")
